@@ -60,7 +60,7 @@
     const firebaseConfig = {
       apiKey: "AIzaSyArgNsg5frTJ8ptzhxNR9iUXJGmyBXGDes",
       authDomain: "shuttle-ea481.firebaseapp.com",
-      databaseURL: "https://shuttle-ea481-default-rtdb.firebaseio.com", // <-- verified working
+      databaseURL: "https://shuttle-ea481-default-rtdb.firebaseio.com",
       projectId: "shuttle-ea481",
       storageBucket: "shuttle-ea481.firebasestorage.app",
       messagingSenderId: "984382793220",
@@ -129,6 +129,7 @@
     // ---------- DATA BINDING ----------
     let unsub = null;
     window.selectSession = function(code){
+      window.currentSession = code; // track active session globally
       const codeInput = document.getElementById('code');
       if (codeInput) codeInput.value = code;
       history.replaceState({}, '', `?session=${code}`);
@@ -140,9 +141,9 @@
       unsub = onValue(r, (snap) => {
         const data = snap.val() || null;
         cacheSet(code, data);
-        renderAll(data);
+        renderAll(data || {});
       });
-      renderAll(cacheGet(code)); // optimistic render from cache
+      renderAll(cacheGet(code) || {}); // optimistic from cache
     };
 
     // ---------- HELPERS ----------
@@ -240,7 +241,7 @@
     };
 
     // Render pipeline
-    window.renderAll = (data) => {
+    window.renderAll = (data = {}) => {
       renderAttendance(data);
       renderTeams(data);
       renderFixtures(data);
@@ -272,7 +273,7 @@
     <!-- Join -->
     <section id="tab-join" class="px-4 fade-slide-in">
       <div class="glass neon rounded-3xl p-4 shadow-soft mt-2">
-        <div class="text-lg font-extrabold mb-2">Create or Join a Night</div>
+        <div class="text-lg font-extrabold mb-2">Create or Join the shuttle League</div>
         <div class="grid gap-2">
           <input id="name" placeholder="Your name" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none">
           <div class="grid grid-cols-3 gap-2">
@@ -290,7 +291,10 @@
     <section id="tab-attendance" class="hidden px-4 fade-slide-in">
       <div class="glass neon rounded-3xl p-4 shadow-soft mt-2">
         <div class="flex items-center justify-between">
-          <div class="font-extrabold">Attendance</div>
+          <div class="flex items-center gap-2">
+            <div class="font-extrabold">Attendance</div>
+            <span id="lock-badge" class="hidden text-[10px] px-2 py-0.5 rounded-full bg-white/10 border border-white/10">Locked</span>
+          </div>
           <div class="text-xs opacity-70" id="att-count">0 players</div>
         </div>
         <div id="att-list" class="mt-3 flex flex-col gap-2"></div>
@@ -421,41 +425,65 @@
       const p = document.createElement('p'); p.className='text-xs opacity-80 break-all text-center'; p.textContent = url; qr.appendChild(p);
     }
 
-    // Render functions
-    function renderAttendance(data){
+    // ---- Render functions (now lock-aware and session-safe) ----
+    function renderAttendance(data = {}){
       const wrap = document.getElementById('att-list'); wrap.innerHTML='';
-      const code = codeEl.value;
+      const code = window.currentSession || codeEl.value || '';
       const players = Object.entries(data?.players||{});
-      document.getElementById('att-count').textContent = `${players.length} players`;
-      players.forEach(([uid,p])=>{
-        const btn = document.createElement('button');
-        btn.className = `w-full text-left bg-white/5 border border-white/10 rounded-xl px-4 py-3 ${p.isComing?'ring-1 ring-[rgba(0,245,200,.5)]':''}`;
-        btn.innerHTML = `<div class="flex items-center justify-between">
-          <span class="font-semibold">${p.name}</span>
-          <span class="text-xs ${p.isComing?'text-neon-emerald':'text-white/50'}">${p.isComing?'✅ Coming':'—'}</span>
-        </div>`;
-        btn.onclick = ()=>toggleComing(code, uid, p.isComing);
-        wrap.appendChild(btn);
-      });
+      const locked = !!data?.meta?.locked;
 
-      document.getElementById('btn-lock').onclick = ()=>setLocked(code, true);
-      document.getElementById('btn-unlock').onclick = ()=>setLocked(code, false);
+      // Header counts + lock badge
+      const cntEl = document.getElementById('att-count');
+      const badge = document.getElementById('lock-badge');
+      cntEl.textContent = `${players.length} players${locked ? ' • LOCKED' : ''}`;
+      if (badge) badge.classList.toggle('hidden', !locked);
+
+      // Buttons reflect state
+      const btnLock = document.getElementById('btn-lock');
+      const btnUnlock = document.getElementById('btn-unlock');
+      btnLock.disabled = locked || !code;
+      btnUnlock.disabled = !locked || !code;
+      btnLock.onclick = ()=> setLocked(code, true);
+      btnUnlock.onclick = ()=> setLocked(code, false);
+
+      // List
+      players.forEach(([uid,p])=>{
+        const row = document.createElement('button');
+        row.disabled = locked; // block toggling when locked
+        row.className = `
+          w-full text-left bg-white/5 border border-white/10 rounded-xl px-4 py-3
+          ${p.isComing ? 'ring-1 ring-[rgba(0,245,200,.5)]' : ''}
+          ${locked ? 'opacity-60 cursor-not-allowed' : ''}
+        `.replace(/\s+/g,' ').trim();
+        row.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="font-semibold">${p.name}</span>
+            <span class="text-xs ${p.isComing?'text-neon-emerald':'text-white/50'}">
+              ${p.isComing?'✅ Coming':'—'}
+            </span>
+          </div>`;
+        if (!locked) row.onclick = ()=>toggleComing(code, uid, p.isComing);
+        wrap.appendChild(row);
+      });
     }
 
-    function renderTeams(data){
+    function renderTeams(data = {}){
       const wrap = document.getElementById('teams'); wrap.innerHTML='';
-      const code = codeEl.value;
       (Object.entries(data?.teams||{})).forEach(([id,t],i)=>{
-        const div = document.createElement('div');
         const a = (t.players||[]).map(u => data.players?.[u]?.name || '—').join(' & ');
+        const div = document.createElement('div');
         div.className = 'bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex items-center justify-between';
         div.innerHTML = `<div class="text-sm">Team ${i+1}</div><div class="text-xs opacity-80">${a}</div>${t.sub?'<span class="text-[10px] text-yellow-300]">(Sub)</span>':''}`;
         wrap.appendChild(div);
       });
-      document.getElementById('btn-shuffle').onclick = ()=>shuffleTeams(code, data);
+      document.getElementById('btn-shuffle').onclick = ()=>{
+        const code = window.currentSession || codeEl.value || '';
+        if (!code) return alert('Join or create a session first.');
+        shuffleTeams(code, data);
+      };
     }
 
-    function renderFixtures(data){
+    function renderFixtures(data = {}){
       const wrap = document.getElementById('matches'); wrap.innerHTML='';
       Object.entries(data?.matches||{}).forEach(([id,m])=>{
         const ta = (data.teams?.[m.teamA]?.players||[]).map(u=>data.players?.[u]?.name).join(' & ');
@@ -468,12 +496,17 @@
         wrap.appendChild(row);
       });
       const btn = document.getElementById('btn-genfix');
-      btn.onclick = ()=>genFixtures(codeEl.value, data);
+      btn.onclick = ()=>{
+        const code = window.currentSession || codeEl.value || '';
+        if (!code) return alert('Join or create a session first.');
+        genFixtures(code, data);
+      };
     }
 
-    function renderLive(data){
+    function renderLive(data = {}){
       const wrap = document.getElementById('live-list'); wrap.innerHTML='';
       const entries = Object.entries(data?.matches||{}).sort((a,b)=> (a[1].round-b[1].round)||(a[1].court-b[1].court));
+      const code = window.currentSession || codeEl.value || '';
       entries.forEach(([id,m])=>{
         const card = document.createElement('div');
         card.className = 'glass neon rounded-3xl p-4 shadow-soft';
@@ -509,17 +542,19 @@
             <button class="fin bg-white/5 border border-white/10 rounded-xl px-3 py-2">Finish</button>
           </div>`;
         wrap.appendChild(card);
-        card.querySelector('.pnd').onclick = ()=>setMatchStatus(codeEl.value, id, 'pending');
-        card.querySelector('.lv').onclick  = ()=>setMatchStatus(codeEl.value, id, 'live');
-        card.querySelector('.fin').onclick = ()=>setMatchStatus(codeEl.value, id, 'finished');
-        card.querySelector('.plusA').onclick = ()=>scoreOp(codeEl.value, data, id,'A',+1);
-        card.querySelector('.minusA').onclick= ()=>scoreOp(codeEl.value, data, id,'A',-1);
-        card.querySelector('.plusB').onclick = ()=>scoreOp(codeEl.value, data, id,'B',+1);
-        card.querySelector('.minusB').onclick= ()=>scoreOp(codeEl.value, data, id,'B',-1);
+
+        // Handlers use currentSession, not codeEl.value
+        card.querySelector('.pnd').onclick = ()=>setMatchStatus(code, id, 'pending');
+        card.querySelector('.lv').onclick  = ()=>setMatchStatus(code, id, 'live');
+        card.querySelector('.fin').onclick = ()=>setMatchStatus(code, id, 'finished');
+        card.querySelector('.plusA').onclick = ()=>scoreOp(code, data, id,'A',+1);
+        card.querySelector('.minusA').onclick= ()=>scoreOp(code, data, id,'A',-1);
+        card.querySelector('.plusB').onclick = ()=>scoreOp(code, data, id,'B',+1);
+        card.querySelector('.minusB').onclick= ()=>scoreOp(code, data, id,'B',-1);
       });
     }
 
-    function renderLeaderboard(data){
+    function renderLeaderboard(data = {}){
       const board = document.getElementById('board'); board.innerHTML='';
       const players = Object.entries(data?.players||{});
       const scores = {};
@@ -529,7 +564,7 @@
         const aWin = (m.aScore||0) > (m.bScore||0);
         const aTeam = data.teams?.[m.teamA]?.players||[];
         const bTeam = data.teams?.[m.teamB]?.players||[];
-        for (const u of (aWin?aTeam:bTeam)) scores[u] = (scores[u]||0)+2;
+        for (const u of (aWin?aTeam:bTeam)) if (u) scores[u] = (scores[u]||0)+2;
       });
       // attendance
       players.forEach(([uid,p])=>{ if (p.isComing) scores[uid]=(scores[uid]||0)+1; });
