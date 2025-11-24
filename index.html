@@ -1,505 +1,548 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Shuttle League Tonight — TEMP</title>
-  <meta name="theme-color" content="#0b0f19" />
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    .card{ @apply bg-slate-900/60 border border-slate-700 rounded-2xl p-4 shadow; }
-    .btn{ @apply px-4 py-2 rounded-xl border border-slate-600 bg-slate-800 hover:bg-slate-700 active:scale-[.98]; }
-    .input{ @apply w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-600 outline-none; }
-    .badge{ @apply text-xs px-2 py-1 rounded-full border border-slate-600; }
-  </style>
-</head>
-<body class="bg-slate-950 text-slate-200 min-h-screen">
-  <div class="max-w-3xl mx-auto p-4 space-y-4">
-    <header class="flex items-center justify-between">
-      <h1 class="text-xl font-semibold">🏸 Shuttle League Tonight (TEMP)</h1>
-      <div class="text-xs opacity-70" id="tz">IST</div>
-    </header>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Shuttle League — Single File</title>
 
-    <!-- Auth & Session -->
-    <section class="card space-y-3">
-      <div class="grid gap-3 md:grid-cols-2">
-        <div>
-          <label class="text-sm">Your name</label>
-          <input id="name" class="input" placeholder="e.g., Vineed" />
-        </div>
-        <div class="grid grid-cols-[1fr_auto] gap-2">
-          <div>
-            <label class="text-sm">Session code</label>
-            <input id="code" class="input" placeholder="e.g., 6K2JQX" />
+  <!-- Tailwind CDN (fine for dev; switch to CLI for prod) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            base: '#0B0E14',
+            neon: { emerald: '#00F5C8', blue: '#45A3FF' }
+          },
+          boxShadow: {
+            glow: '0 0 30px rgba(0,245,200,.25)',
+            soft: '0 10px 30px rgba(0,0,0,.35)'
+          },
+          fontFamily: {
+            manrope: ['Manrope','system-ui'],
+            outfit: ['Outfit','system-ui']
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root { --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom); }
+    html, body { height: 100%; background:#0B0E14; }
+    .glass { background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,.08); }
+    .neon { box-shadow: 0 0 0 1px rgba(69,163,255,.25), 0 0 20px rgba(0,245,200,.25); }
+    .gradient-bg { background:
+      radial-gradient(1200px 400px at 50% -10%, rgba(0,245,200,.15), transparent),
+      radial-gradient(800px 400px at 100% 10%, rgba(69,163,255,.12), transparent),
+      #0B0E14; }
+    .tab-active { color:#00F5C8 }
+    .safe-top { padding-top: max(8px, env(safe-area-inset-top)); }
+    .safe-bottom { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+    .fade-slide-in { animation: fsIn .35s cubic-bezier(.2,.8,.2,1); }
+    @keyframes fsIn { from { opacity:0; transform: translateY(8px) } to { opacity:1; transform: translateY(0) } }
+    .bounce { animation: bnc .5s cubic-bezier(.2,.8,.2,1); }
+    @keyframes bnc { 0%{transform:scale(.98)} 60%{transform:scale(1.02)} 100%{transform:scale(1)} }
+    button:disabled { opacity:.5; cursor:not-allowed }
+  </style>
+
+  <!-- Firebase v10 CDN (modular) -->
+  <script type="module" id="firebase-init">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+    import { getDatabase, ref, onValue, set, update, push, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js";
+
+    // Exact config + correct Realtime Database URL
+    const firebaseConfig = {
+      apiKey: "AIzaSyArgNsg5frTJ8ptzhxNR9iUXJGmyBXGDes",
+      authDomain: "shuttle-ea481.firebaseapp.com",
+      databaseURL: "https://shuttle-ea481-default-rtdb.firebaseio.com", // <-- verified working
+      projectId: "shuttle-ea481",
+      storageBucket: "shuttle-ea481.firebasestorage.app",
+      messagingSenderId: "984382793220",
+      appId: "1:984382793220:web:4605b2608bf2d8f45db751"
+    };
+
+    const app  = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    // Pass URL explicitly so the SDK doesn't guess a wrong regional host
+    const db   = getDatabase(app, firebaseConfig.databaseURL);
+
+    // Expose for other inline scripts
+    window.fb = { app, auth, db, ref, onValue, set, update, push, serverTimestamp };
+
+    // ---------- AUTH READY GATE + STATUS ----------
+    let resolveAuthReady, rejectAuthReady;
+    const authReady = new Promise((res, rej) => { resolveAuthReady = res; rejectAuthReady = rej; });
+    window.authReady = authReady;
+
+    const setStatus = (t, err=false) => {
+      const el = document.getElementById('status');
+      if (!el) return;
+      el.textContent = t;
+      el.className = "text-xs " + (err ? "text-red-400" : "text-neon-emerald");
+    };
+
+    onAuthStateChanged(auth, async (u) => {
+      if (!u) {
+        try {
+          await signInAnonymously(auth);
+        } catch (e) {
+          console.error("Anonymous sign-in failed:", e);
+          setStatus("Auth failed: enable Anonymous sign-in & add localhost/127.0.0.1 to Authorized domains.", true);
+          rejectAuthReady?.(e);
+        }
+        return;
+      }
+
+      resolveAuthReady?.(u);
+      setStatus("Signed in (anonymous)");
+
+      // Healthcheck write — validates DB URL + rules
+      try {
+        await set(ref(db, "__healthcheck"), { t: Date.now() });
+        setStatus("DB OK");
+      } catch (e) {
+        console.error("DB write failed:", e);
+        setStatus("DB reachable but write blocked — set Realtime DB rules to auth != null for dev.", true);
+      }
+
+      // Hydrate session from URL if present
+      const params = new URLSearchParams(location.search);
+      const sess = params.get('session');
+      if (sess) selectSession(sess);
+    });
+
+    // Helper for click handlers
+    window.getUid = async () => auth.currentUser?.uid ?? (await authReady).uid;
+
+    // ---------- LOCAL CACHE ----------
+    const LSKEY = "shuttle.cache";
+    function cacheGet(code){ try{ return JSON.parse(localStorage.getItem(LSKEY)||"{}")[code]||null }catch{ return null } }
+    function cacheSet(code,data){ try{ const obj=JSON.parse(localStorage.getItem(LSKEY)||"{}"); obj[code]=data; localStorage.setItem(LSKEY,JSON.stringify(obj)); }catch{} }
+    window.cache = { get: cacheGet, set: cacheSet };
+
+    // ---------- DATA BINDING ----------
+    let unsub = null;
+    window.selectSession = function(code){
+      const codeInput = document.getElementById('code');
+      if (codeInput) codeInput.value = code;
+      history.replaceState({}, '', `?session=${code}`);
+      const bindEl = document.getElementById('bind');
+      bindEl.textContent = code;
+
+      if (unsub) unsub();
+      const r = ref(db, `sessions/${code}`);
+      unsub = onValue(r, (snap) => {
+        const data = snap.val() || null;
+        cacheSet(code, data);
+        renderAll(data);
+      });
+      renderAll(cacheGet(code)); // optimistic render from cache
+    };
+
+    // ---------- HELPERS ----------
+    window.randCode = () => Math.floor(100000 + Math.random()*900000).toString();
+
+    window.ensurePlayer = async (code, uid, name="Player") => {
+      await set(ref(db, `sessions/${code}/players/${uid}`), {
+        name, isComing: true, createdAt: serverTimestamp()
+      });
+    };
+
+    window.toggleComing = async (code, uid, isComing) => {
+      await update(ref(db, `sessions/${code}/players/${uid}`), { isComing: !isComing });
+    };
+
+    window.setLocked = async (code, locked) => {
+      await update(ref(db, `sessions/${code}/meta`), { locked });
+    };
+
+    window.shuffleTeams = async (code, data) => {
+      await set(ref(db, `sessions/${code}/teams`), null);
+      const players = Object.entries(data?.players||{}).filter(([,p])=>p.isComing).map(([uid,p])=>({uid,name:p.name}));
+      const shuffled = players.map(p=>[Math.random(),p]).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
+      const used = new Set();
+      const pairs = [];
+      for (let i=0;i<shuffled.length-1;i++){
+        const a = shuffled[i]; if (used.has(a.uid)) continue;
+        let partner = null;
+        for (let j=i+1;j<shuffled.length;j++){
+          const b = shuffled[j]; if (!used.has(b.uid)) { partner=b; break; }
+        }
+        if (partner){ used.add(a.uid); used.add(partner.uid); pairs.push([a.uid, partner.uid]); }
+      }
+      const leftovers = shuffled.filter(p=>!used.has(p.uid)).map(p=>p.uid);
+      for (const pr of pairs) await push(ref(db, `sessions/${code}/teams`), { players: pr });
+      if (leftovers.length) await push(ref(db, `sessions/${code}/teams`), { players: [leftovers[0], null], sub:true });
+    };
+
+    function roundRobin(teamIds){
+      const n = teamIds.length; if (n<2) return [];
+      const arr = teamIds.slice(); if (n%2===1) arr.push(null);
+      const size = arr.length, half=size/2, rounds=[];
+      for(let r=0;r<size-1;r++){
+        const matches=[];
+        for(let i=0;i<half;i++){
+          const a=arr[i], b=arr[size-1-i];
+          if(a!==null && b!==null) matches.push([a,b]);
+        }
+        rounds.push(matches);
+        const fixed = arr[0];
+        const rotated = [fixed, ...arr.slice(-1), ...arr.slice(1,-1)];
+        for(let i=0;i<size;i++) arr[i]=rotated[i];
+      }
+      return rounds;
+    }
+
+    window.genFixtures = async (code, data) => {
+      await set(ref(db, `sessions/${code}/matches`), null);
+      const teams = Object.keys(data?.teams||{});
+      const courts = data?.meta?.courts || 2;
+      const rounds = roundRobin(teams);
+      for (let r=0;r<rounds.length;r++){
+        const matches = rounds[r];
+        for (let i=0;i<matches.length;i++){
+          const [A,B] = matches[i];
+          await push(ref(db, `sessions/${code}/matches`), {
+            round: r+1, court: (i % courts) + 1, teamA: A, teamB: B,
+            status: "pending", aScore: 0, bScore: 0
+          });
+        }
+      }
+    };
+
+    window.setMatchStatus = (code, id, status) =>
+      update(ref(db, `sessions/${code}/matches/${id}`), { status });
+
+    window.scoreOp = (code, data, id, side, delta) => {
+      const m = data.matches[id];
+      const key = side==='A' ? 'aScore' : 'bScore';
+      const next = Math.max(0, (m[key]||0) + delta);
+      const payload = { [key]: next };
+      const a = side==='A' ? next : (m.aScore||0);
+      const b = side==='B' ? next : (m.bScore||0);
+      if ((a>=21 || b>=21) && Math.abs(a-b) >= 2) payload.status='finished';
+      return update(ref(db, `sessions/${code}/matches/${id}`), payload);
+    };
+
+    window.exportCSV = (rows, filename="standings.csv") => {
+      const esc = v => `"${String(v??'').replaceAll('"','""')}"`;
+      const csv = rows.map(r => r.map(esc).join(',')).join('\n');
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = Object.assign(document.createElement('a'), { href:url, download:filename });
+      a.click(); URL.revokeObjectURL(url);
+    };
+
+    // Render pipeline
+    window.renderAll = (data) => {
+      renderAttendance(data);
+      renderTeams(data);
+      renderFixtures(data);
+      renderLive(data);
+      renderLeaderboard(data);
+      document.getElementById('live-dot').className =
+        (Object.values(data?.matches||{}).some(m=>m.status==='live')
+          ? 'text-neon-emerald'
+          : 'text-white/60');
+    };
+  </script>
+</head>
+<body class="text-white font-outfit gradient-bg min-h-screen">
+  <!-- Header -->
+  <header class="safe-top px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <svg width="20" height="20" viewBox="0 0 24 24" class="text-neon-blue"><circle cx="12" cy="12" r="10" fill="#45A3FF"/></svg>
+      <span class="font-extrabold">Shuttle League</span>
+    </div>
+    <div class="text-xs opacity-80 flex items-center gap-2">
+      <span id="online-label">Live</span>
+      <span id="live-dot" class="text-white/60">●</span>
+      <span id="status" class="text-xs text-white/60">Signing in…</span>
+    </div>
+  </header>
+
+  <!-- Tabs -->
+  <main class="max-w-md mx-auto pb-28">
+    <!-- Join -->
+    <section id="tab-join" class="px-4 fade-slide-in">
+      <div class="glass neon rounded-3xl p-4 shadow-soft mt-2">
+        <div class="text-lg font-extrabold mb-2">Create or Join a Night</div>
+        <div class="grid gap-2">
+          <input id="name" placeholder="Your name" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none">
+          <div class="grid grid-cols-3 gap-2">
+            <input id="code" inputmode="numeric" maxlength="6" placeholder="Session code" class="col-span-2 bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none">
+            <button id="btn-join" class="bg-neon-emerald/20 border border-neon-emerald/40 rounded-xl px-3 py-3 font-bold">Join</button>
           </div>
-          <div class="flex items-end">
-            <button id="btn-join" class="btn">Join</button>
-          </div>
+          <button id="btn-create" class="w-full bg-neon-blue/20 border border-neon-blue/40 rounded-xl px-4 py-3 font-extrabold">Create New (6-digit)</button>
+          <div class="text-[11px] opacity-70">Session: <span id="bind">—</span></div>
+          <div id="qr" class="mt-2 flex flex-col items-center gap-2"></div>
         </div>
       </div>
-      <div class="flex flex-wrap gap-2">
-        <button id="btn-create" class="btn">Create New Session</button>
-        <button id="btn-share" class="btn" title="Share join link">Share Link</button>
-        <span id="you" class="badge"></span>
-        <span id="admin-badge" class="badge hidden">Admin</span>
-        <span id="lock-badge" class="badge hidden">Locked</span>
-      </div>
-      <p class="text-xs opacity-70">All updates sync live via Firebase. Attendance/fixtures are conflict-safe using server timestamps & transactions.</p>
     </section>
 
     <!-- Attendance -->
-    <section class="card space-y-3">
-      <div class="flex items-center justify-between">
-        <h2 class="font-semibold">Attendance</h2>
-        <div class="flex items-center gap-2 text-sm">
-          <label>Courts</label>
-          <input id="courts" type="number" min="1" value="1" class="input w-20" />
-          <button id="btn-lock" class="btn" title="Lock attendance & teams">Lock</button>
-          <button id="btn-unlock" class="btn" title="Unlock (pre-start)">Unlock</button>
+    <section id="tab-attendance" class="hidden px-4 fade-slide-in">
+      <div class="glass neon rounded-3xl p-4 shadow-soft mt-2">
+        <div class="flex items-center justify-between">
+          <div class="font-extrabold">Attendance</div>
+          <div class="text-xs opacity-70" id="att-count">0 players</div>
+        </div>
+        <div id="att-list" class="mt-3 flex flex-col gap-2"></div>
+        <div class="mt-3 grid grid-cols-2 gap-2">
+          <button id="btn-lock" class="bg-neon-emerald/20 border border-neon-emerald/40 rounded-xl px-3 py-2 font-bold">Lock</button>
+          <button id="btn-unlock" class="bg-white/5 border border-white/10 rounded-xl px-3 py-2 font-bold">Unlock</button>
         </div>
       </div>
-      <div class="grid md:grid-cols-2 gap-3">
-        <div class="space-y-2">
-          <div class="flex items-center gap-2">
-            <label class="text-sm">I'm coming today</label>
-            <input id="coming" type="checkbox" class="h-5 w-5" />
-          </div>
-          <ul id="attendees" class="text-sm grid grid-cols-2 gap-1"></ul>
+    </section>
+
+    <!-- Teams -->
+    <section id="tab-teams" class="hidden px-4 fade-slide-in">
+      <div class="glass neon rounded-3xl p-4 shadow-soft mt-2">
+        <div class="flex items-center justify-between">
+          <div class="font-extrabold">Team Generator</div>
+          <button id="btn-shuffle" class="bg-neon-blue/20 border border-neon-blue/40 rounded-xl px-3 py-2 font-bold">Shuffle</button>
         </div>
-        <div class="space-y-2">
-          <div class="flex items-center gap-2">
-            <button id="btn-make-teams" class="btn">Generate Teams</button>
-            <select id="pairing-mode" class="input w-44">
-              <option value="random">Random</option>
-              <option value="no-repeat">Avoid repeats</option>
-            </select>
-          </div>
-          <div id="teams" class="grid sm:grid-cols-2 gap-2"></div>
-        </div>
+        <div id="teams" class="mt-3 grid gap-2"></div>
       </div>
     </section>
 
     <!-- Fixtures -->
-    <section class="card space-y-3">
-      <div class="flex items-center gap-2">
-        <h2 class="font-semibold">Fixtures</h2>
-        <button id="btn-fixtures" class="btn">Create Round‑Robin</button>
+    <section id="tab-fixtures" class="hidden px-4 fade-slide-in">
+      <div class="glass neon rounded-3xl p-4 shadow-soft mt-2">
+        <div class="flex items-center justify-between">
+          <div class="font-extrabold">Fixture Maker</div>
+          <button id="btn-genfix" class="bg-neon-emerald/20 border border-neon-emerald/40 rounded-xl px-3 py-2 font-bold">Generate</button>
+        </div>
+        <div id="matches" class="mt-3 grid gap-2"></div>
       </div>
-      <div id="fixtures" class="space-y-3"></div>
     </section>
 
-    <!-- Live Scoring -->
-    <section class="card space-y-3">
-      <h2 class="font-semibold">Live Matches</h2>
-      <div id="live" class="space-y-2"></div>
+    <!-- Live + Leaderboard -->
+    <section id="tab-live" class="hidden px-4 fade-slide-in">
+      <div id="live-list" class="grid gap-3 mt-2"></div>
+      <div class="glass neon rounded-3xl p-4 shadow-soft mt-3">
+        <div class="flex items-center justify-between">
+          <div class="font-extrabold">Leaderboard</div>
+          <button id="btn-csv" class="text-xs bg-white/5 border border-white/10 rounded-xl px-3 py-2">Export CSV</button>
+        </div>
+        <div id="board" class="mt-3 flex flex-col gap-2"></div>
+      </div>
     </section>
+  </main>
 
-    <footer class="text-[11px] opacity-60 text-center py-4">Timezone: Asia/Kolkata • Temporary single-file app using Firebase</footer>
-  </div>
+  <!-- Bottom Nav -->
+  <nav class="safe-bottom fixed bottom-0 left-0 right-0">
+    <div class="mx-auto max-w-md">
+      <div class="glass neon rounded-t-3xl flex items-center justify-between px-4 py-2">
+        <button data-tab="join" class="tab w-full flex flex-col items-center py-2"><span class="text-sm">Join</span></button>
+        <button data-tab="attendance" class="tab w-full flex flex-col items-center py-2"><span class="text-sm">Attendance</span></button>
+        <button data-tab="teams" class="tab w-full flex flex-col items-center py-2"><span class="text-sm">Teams</span></button>
+        <button data-tab="fixtures" class="tab w-full flex flex-col items-center py-2"><span class="text-sm">Fixtures</span></button>
+        <button data-tab="live" class="tab w-full flex flex-col items-center py-2"><span class="text-sm">Live</span></button>
+      </div>
+    </div>
+  </nav>
 
-  <!-- Firebase v10 (modular) -->
-  <script type="module">
-    // ======= 1) CONFIGURE THIS BLOCK =======
-    const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT.firebaseapp.com",
-      databaseURL: "https://YOUR_PROJECT-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "YOUR_PROJECT",
-      storageBucket: "YOUR_PROJECT.appspot.com",
-      messagingSenderId: "XXXX",
-      appId: "XXXX"
+  <!-- App logic -->
+  <script>
+    // Online indicator
+    const onlineLabel = document.getElementById('online-label');
+    const setOnline = () => onlineLabel.textContent = navigator.onLine ? 'Live' : 'Offline';
+    addEventListener('online', setOnline); addEventListener('offline', setOnline); setOnline();
+
+    // Simple tab router
+    const tabs = ['join','attendance','teams','fixtures','live'];
+    function showTab(t){
+      for (const id of tabs){
+        document.getElementById('tab-'+id).classList.toggle('hidden', id!==t);
+      }
+      document.querySelectorAll('button.tab').forEach(b=>{
+        const active = b.dataset.tab===t; b.classList.toggle('tab-active', active);
+      });
+      localStorage.setItem('shuttle.tab', t);
+    }
+    document.querySelectorAll('button.tab').forEach(b=>b.addEventListener('click', ()=>showTab(b.dataset.tab)));
+    showTab(localStorage.getItem('shuttle.tab') || 'join');
+
+    // Join/Create handlers
+    const nameEl   = document.getElementById('name');
+    const codeEl   = document.getElementById('code');
+    const btnCreate= document.getElementById('btn-create');
+    const btnJoin  = document.getElementById('btn-join');
+
+    // Disable until auth is ready
+    btnCreate.disabled = btnJoin.disabled = true;
+    (window.authReady ?? Promise.resolve()).then(()=>{
+      btnCreate.disabled = btnJoin.disabled = false;
+    }).catch(()=>{ /* keep disabled on auth failure */ });
+
+    document.getElementById('btn-create').onclick = async () => {
+      try {
+        const code = randCode();
+        codeEl.value = code;
+        const uid = await getUid();
+        await fb.set(fb.ref(fb.db, `sessions/${code}/meta`), { creatorUid: uid, locked:false, courts:2, createdAt: fb.serverTimestamp() });
+        await ensurePlayer(code, uid, nameEl.value||'Player');
+        selectSession(code);
+        flashQR(code);
+        showTab('attendance');
+      } catch (e) {
+        alert('Cannot create session: authentication/database not ready.\nFix Firebase settings and reload.');
+      }
     };
-    // =======================================
 
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-    import { getDatabase, ref, onValue, set, push, update, serverTimestamp, runTransaction, onDisconnect, child, get } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
-
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getDatabase(app);
-
-    // UI refs
-    const el = (id)=>document.getElementById(id);
-    const nameInput = el('name');
-    const codeInput = el('code');
-    const btnJoin = el('btn-join');
-    const btnCreate = el('btn-create');
-    const btnShare = el('btn-share');
-    const youBadge = el('you');
-    const adminBadge = el('admin-badge');
-    const lockBadge = el('lock-badge');
-    const comingChk = el('coming');
-    const attendeesUl = el('attendees');
-    const teamsDiv = el('teams');
-    const courtsInput = el('courts');
-    const btnLock = el('btn-lock');
-    const btnUnlock = el('btn-unlock');
-    const btnMakeTeams = el('btn-make-teams');
-    const pairingModeSel = el('pairing-mode');
-    const btnFixtures = el('btn-fixtures');
-    const fixturesDiv = el('fixtures');
-    const liveDiv = el('live');
-
-    // State
-    let UID = null;
-    let SESSION = null; // session code
-    let IS_ADMIN = false;
-    let LOCKED = false;
-
-    // Helpers
-    const IST = 'Asia/Kolkata';
-    document.getElementById('tz').textContent = new Date().toLocaleString('en-IN', { timeZone: IST });
-
-    function codeFromURL(){
-      const u = new URL(location.href);
-      return u.searchParams.get('code');
-    }
-
-    function shortCode(){
-      return Math.random().toString(36).toUpperCase().replace(/[^A-Z0-9]/g,'').slice(2,8);
-    }
-
-    function sessionPath(...parts){
-      return ['sessions', SESSION, ...parts].join('/');
-    }
-
-    function renderAttendees(players){
-      attendeesUl.innerHTML='';
-      const arr = Object.entries(players || {}).map(([uid,p])=>({uid,...p})).sort((a,b)=>a.name.localeCompare(b.name));
-      for(const p of arr){
-        const li = document.createElement('li');
-        li.className = 'flex items-center gap-2';
-        const dot = document.createElement('span');
-        dot.className = 'w-2 h-2 rounded-full ' + (p.isComing? 'bg-green-400':'bg-slate-500');
-        li.append(dot);
-        const name = document.createElement('span');
-        name.textContent = p.name + (p.uid===UID?' (you)':'');
-        li.append(name);
-        attendeesUl.append(li);
+    document.getElementById('btn-join').onclick = async () => {
+      try {
+        const code = (codeEl.value||'').replace(/[^0-9]/g,'');
+        if (!code || code.length<6) { alert('Enter 6-digit code'); return; }
+        const uid = await getUid();
+        await ensurePlayer(code, uid, nameEl.value||'Player');
+        selectSession(code);
+        flashQR(code);
+        showTab('attendance');
+      } catch (e) {
+        alert('Cannot join: authentication/database not ready.\nFix Firebase settings and reload.');
       }
+    };
+
+    // QR (external service to avoid bundling a lib)
+    function flashQR(code){
+      const url = `${location.origin}${location.pathname}?session=${code}`;
+      const qr = document.getElementById('qr'); qr.innerHTML='';
+      const img = new Image();
+      img.src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(url)}&bgcolor=0B0E14&color=00F5C8`;
+      img.className = 'rounded-xl bounce'; qr.appendChild(img);
+      const p = document.createElement('p'); p.className='text-xs opacity-80 break-all text-center'; p.textContent = url; qr.appendChild(p);
     }
 
-    function renderTeams(teams, players){
-      teamsDiv.innerHTML='';
-      const list = Object.entries(teams||{}).map(([id,t])=>({id,...t}));
-      for(const t of list){
-        const card = document.createElement('div');
-        card.className='p-3 rounded-xl border border-slate-700 bg-slate-800';
-        const names = (t.players||[]).map(uid=>players?.[uid]?.name||'—').join(' & ');
-        card.innerHTML = `<div class="text-sm">${names}</div>`;
-        teamsDiv.append(card);
-      }
+    // Render functions
+    function renderAttendance(data){
+      const wrap = document.getElementById('att-list'); wrap.innerHTML='';
+      const code = codeEl.value;
+      const players = Object.entries(data?.players||{});
+      document.getElementById('att-count').textContent = `${players.length} players`;
+      players.forEach(([uid,p])=>{
+        const btn = document.createElement('button');
+        btn.className = `w-full text-left bg-white/5 border border-white/10 rounded-xl px-4 py-3 ${p.isComing?'ring-1 ring-[rgba(0,245,200,.5)]':''}`;
+        btn.innerHTML = `<div class="flex items-center justify-between">
+          <span class="font-semibold">${p.name}</span>
+          <span class="text-xs ${p.isComing?'text-neon-emerald':'text-white/50'}">${p.isComing?'✅ Coming':'—'}</span>
+        </div>`;
+        btn.onclick = ()=>toggleComing(code, uid, p.isComing);
+        wrap.appendChild(btn);
+      });
+
+      document.getElementById('btn-lock').onclick = ()=>setLocked(code, true);
+      document.getElementById('btn-unlock').onclick = ()=>setLocked(code, false);
     }
 
-    function renderFixtures(matches, teams){
-      fixturesDiv.innerHTML='';
-      const byRound = {};
-      for(const [id,m] of Object.entries(matches||{})){
-        (byRound[m.round] ||= []).push({id, ...m});
-      }
-      const rounds = Object.keys(byRound).sort((a,b)=>a-b);
-      for(const r of rounds){
-        const box = document.createElement('div');
-        box.className='p-3 rounded-xl border border-slate-700 bg-slate-800';
-        const h = document.createElement('div');
-        h.className='text-sm font-semibold mb-2';
-        h.textContent = `Round ${r}`;
-        box.append(h);
-        for(const m of byRound[r]){
-          const ta = teams?.[m.teamA];
-          const tb = teams?.[m.teamB];
-          const a = (ta?.players||[]).map(pid=>window._players?.[pid]?.name||'—').join(' & ');
-          const b = (tb?.players||[]).map(pid=>window._players?.[pid]?.name||'—').join(' & ');
-          const row = document.createElement('div');
-          row.className='flex flex-wrap items-center gap-2 text-sm justify-between border-t border-slate-700 py-2';
-          row.innerHTML = `<div>Court ${m.court||1}: <span class="font-medium">${a}</span> vs <span class="font-medium">${b}</span></div>`;
-          // Score buttons
-          const btnA = document.createElement('button');
-          btnA.className='btn text-xs'; btnA.textContent='A +1 game';
-          const btnB = document.createElement('button');
-          btnB.className='btn text-xs'; btnB.textContent='B +1 game';
-          const done = document.createElement('button');
-          done.className='btn text-xs'; done.textContent='Finalize';
-          const score = document.createElement('span');
-          score.className='badge';
-          score.textContent = `${m.aGames||0} - ${m.bGames||0}`;
-          btnA.onclick = ()=> incGame(m.id,'A');
-          btnB.onclick = ()=> incGame(m.id,'B');
-          done.onclick = ()=> finalizeMatch(m.id);
-          const right = document.createElement('div');
-          right.className='flex gap-2 items-center';
-          right.append(score, btnA, btnB, done);
-          row.append(right);
-          box.append(row);
-        }
-        fixturesDiv.append(box);
-      }
+    function renderTeams(data){
+      const wrap = document.getElementById('teams'); wrap.innerHTML='';
+      const code = codeEl.value;
+      (Object.entries(data?.teams||{})).forEach(([id,t],i)=>{
+        const div = document.createElement('div');
+        const a = (t.players||[]).map(u => data.players?.[u]?.name || '—').join(' & ');
+        div.className = 'bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex items-center justify-between';
+        div.innerHTML = `<div class="text-sm">Team ${i+1}</div><div class="text-xs opacity-80">${a}</div>${t.sub?'<span class="text-[10px] text-yellow-300]">(Sub)</span>':''}`;
+        wrap.appendChild(div);
+      });
+      document.getElementById('btn-shuffle').onclick = ()=>shuffleTeams(code, data);
     }
 
-    function renderLive(matches, teams){
-      liveDiv.innerHTML='';
-      const live = Object.entries(matches||{}).filter(([id,m])=>m.status==='live');
-      for(const [id,m] of live){
-        const ta = teams?.[m.teamA];
-        const tb = teams?.[m.teamB];
-        const a = (ta?.players||[]).map(pid=>window._players?.[pid]?.name||'—').join(' & ');
-        const b = (tb?.players||[]).map(pid=>window._players?.[pid]?.name||'—').join(' & ');
+    function renderFixtures(data){
+      const wrap = document.getElementById('matches'); wrap.innerHTML='';
+      Object.entries(data?.matches||{}).forEach(([id,m])=>{
+        const ta = (data.teams?.[m.teamA]?.players||[]).map(u=>data.players?.[u]?.name).join(' & ');
+        const tb = (data.teams?.[m.teamB]?.players||[]).map(u=>data.players?.[u]?.name).join(' & ');
         const row = document.createElement('div');
-        row.className='flex items-center justify-between p-3 border border-slate-700 rounded-xl bg-slate-800';
-        row.innerHTML = `<div class="text-sm">Court ${m.court||1}: <b>${a}</b> vs <b>${b}</b></div>`;
-        const score = document.createElement('div');
-        score.className='badge';
-        score.textContent = `${m.aGames||0} - ${m.bGames||0}`;
-        row.append(score);
-        liveDiv.append(row);
-      }
-    }
-
-    // Firebase helpers
-    async function signIn(){
-      await signInAnonymously(auth);
-    }
-
-    function setPresence(){
-      const pr = ref(db, sessionPath('presence', UID));
-      set(pr, true);
-      onDisconnect(pr).remove();
-    }
-
-    async function createSession(){
-      const code = shortCode();
-      const metaRef = ref(db, `sessions/${code}/meta`);
-      await set(metaRef, { creatorUid: UID, createdAt: serverTimestamp(), locked:false, courts: Number(courtsInput.value||1) });
-      return code;
-    }
-
-    async function joinSession(code){
-      SESSION = code.toUpperCase();
-      const u = new URL(location.href);
-      u.searchParams.set('code', SESSION); history.replaceState(null,'',u.toString());
-      // load meta & subscribe
-      onValue(ref(db, sessionPath('meta')), (snap)=>{
-        const meta = snap.val()||{};
-        IS_ADMIN = meta.creatorUid === UID;
-        LOCKED = !!meta.locked;
-        adminBadge.classList.toggle('hidden', !IS_ADMIN);
-        lockBadge.classList.toggle('hidden', !LOCKED);
-        courtsInput.value = meta.courts || 1;
-        courtsInput.disabled = !IS_ADMIN || LOCKED;
-        btnLock.disabled = !IS_ADMIN; btnUnlock.disabled = !IS_ADMIN;
-        btnMakeTeams.disabled = !IS_ADMIN || !meta.locked; // only after lock
-        btnFixtures.disabled = !IS_ADMIN;
+        row.className = 'bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex items-center justify-between';
+        row.innerHTML = `<div class="text-xs">R${m.round} • Court ${m.court}</div>
+           <div class="text-xs opacity-80">${ta} vs ${tb}</div>
+           <div class="text-[10px] ${m.status==='live'?'text-neon-emerald':'text-white/60'}">${m.status}</div>`;
+        wrap.appendChild(row);
       });
-      onValue(ref(db, sessionPath('players')), (snap)=>{
-        window._players = snap.val()||{};
-        renderAttendees(window._players);
-      });
-      onValue(ref(db, sessionPath('teams')), (snap)=>{
-        window._teams = snap.val()||{};
-        renderTeams(window._teams, window._players);
-      });
-      onValue(ref(db, sessionPath('matches')), (snap)=>{
-        window._matches = snap.val()||{};
-        renderFixtures(window._matches, window._teams);
-        renderLive(window._matches, window._teams);
-      });
-      setPresence();
+      const btn = document.getElementById('btn-genfix');
+      btn.onclick = ()=>genFixtures(codeEl.value, data);
     }
 
-    async function savePlayer(isComing){
-      const name = nameInput.value.trim();
-      if(!name){ alert('Enter your name'); return; }
-      const pRef = ref(db, sessionPath('players', UID));
-      await runTransaction(pRef, (curr)=>{
-        const next = curr || { name, createdAt: serverTimestamp() };
-        next.name = name; // allow rename
-        next.isComing = !!isComing;
-        next.updatedAt = serverTimestamp();
-        return next;
+    function renderLive(data){
+      const wrap = document.getElementById('live-list'); wrap.innerHTML='';
+      const entries = Object.entries(data?.matches||{}).sort((a,b)=> (a[1].round-b[1].round)||(a[1].court-b[1].court));
+      entries.forEach(([id,m])=>{
+        const card = document.createElement('div');
+        card.className = 'glass neon rounded-3xl p-4 shadow-soft';
+        const ta = (data.teams?.[m.teamA]?.players||[]).map(u=>data.players?.[u]?.name).join(' & ');
+        const tb = (data.teams?.[m.teamB]?.players||[]).map(u=>data.players?.[u]?.name).join(' & ');
+        card.innerHTML = `
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-sm font-extrabold">R${m.round} • Court ${m.court}</div>
+            <div class="text-[10px] ${m.status==='live'?'text-neon-emerald':'text-white/60'}">${m.status}</div>
+          </div>
+          <div class="text-xs opacity-80 mb-3">${ta} <span class="opacity-60">vs</span> ${tb}</div>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="flex flex-col items-center gap-2">
+              <div class="text-xs opacity-70">Team A</div>
+              <div class="flex items-center gap-2">
+                <button class="minusA bg-white/5 border border-white/10 rounded-xl px-3 py-2">-</button>
+                <div class="scoreA text-4xl font-extrabold">${m.aScore||0}</div>
+                <button class="plusA bg-[rgba(0,245,200,.2)] border border-[rgba(0,245,200,.4)] rounded-xl px-3 py-2">+</button>
+              </div>
+            </div>
+            <div class="flex flex-col items-center gap-2">
+              <div class="text-xs opacity-70">Team B</div>
+              <div class="flex items-center gap-2">
+                <button class="minusB bg-white/5 border border-white/10 rounded-xl px-3 py-2">-</button>
+                <div class="scoreB text-4xl font-extrabold">${m.bScore||0}</div>
+                <button class="plusB bg-[rgba(0,245,200,.2)] border border-[rgba(0,245,200,.4)] rounded-xl px-3 py-2">+</button>
+              </div>
+            </div>
+          </div>
+          <div class="mt-3 grid grid-cols-3 gap-2 text-xs">
+            <button class="pnd bg-white/5 border border-white/10 rounded-xl px-3 py-2">Pending</button>
+            <button class="lv bg-[rgba(0,245,200,.2)] border border-[rgba(0,245,200,.4)] rounded-xl px-3 py-2">Live</button>
+            <button class="fin bg-white/5 border border-white/10 rounded-xl px-3 py-2">Finish</button>
+          </div>`;
+        wrap.appendChild(card);
+        card.querySelector('.pnd').onclick = ()=>setMatchStatus(codeEl.value, id, 'pending');
+        card.querySelector('.lv').onclick  = ()=>setMatchStatus(codeEl.value, id, 'live');
+        card.querySelector('.fin').onclick = ()=>setMatchStatus(codeEl.value, id, 'finished');
+        card.querySelector('.plusA').onclick = ()=>scoreOp(codeEl.value, data, id,'A',+1);
+        card.querySelector('.minusA').onclick= ()=>scoreOp(codeEl.value, data, id,'A',-1);
+        card.querySelector('.plusB').onclick = ()=>scoreOp(codeEl.value, data, id,'B',+1);
+        card.querySelector('.minusB').onclick= ()=>scoreOp(codeEl.value, data, id,'B',-1);
       });
     }
 
-    async function setLocked(flag){
-      if(!IS_ADMIN) return;
-      await update(ref(db, sessionPath('meta')), { locked: !!flag, courts: Number(courtsInput.value||1) });
-    }
-
-    function listAttendees(){
-      const players = window._players||{};
-      return Object.entries(players).filter(([uid,p])=>p.isComing).map(([uid,p])=>({uid, name:p.name}));
-    }
-
-    function pairUp(attendees, mode){
-      const arr = [...attendees];
-      // Shuffle
-      for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; }
-      const teams=[]; let sub=null;
-      if(arr.length % 2 === 1) { sub = arr.pop(); }
-      while(arr.length>=2){
-        const a = arr.pop(); const b = arr.pop();
-        teams.push([a.uid,b.uid]);
-      }
-      return { teams, sub };
-    }
-
-    async function generateTeams(){
-      if(!IS_ADMIN){ alert('Only admin can generate teams'); return; }
-      if(!LOCKED){ alert('Lock attendance first'); return; }
-      const attendees = listAttendees();
-      if(attendees.length < 4){ alert('Need at least 4 players'); return; }
-      const { teams, sub } = pairUp(attendees, pairingModeSel.value);
-      // Write teams atomically: replace existing
-      const tRef = ref(db, sessionPath('teams'));
-      await set(tRef, {});
-      for(const p of teams){
-        const id = push(ref(db, sessionPath('teams'))).key;
-        await set(ref(db, sessionPath('teams', id)), { players: p, createdAt: serverTimestamp() });
-      }
-      if(sub){ await set(ref(db, sessionPath('meta','sub')), { uid: sub.uid, name: sub.name }); }
-      else { await set(ref(db, sessionPath('meta','sub')), null); }
-      alert('Teams generated');
-    }
-
-    function roundRobin(teamIds){
-      const n = teamIds.length;
-      const isOdd = n % 2 === 1;
-      const teams = isOdd ? [...teamIds, 'BYE'] : [...teamIds];
-      const rounds = teams.length - 1; const half = teams.length/2;
-      const arr = [...teams];
-      const schedule = [];
-      for(let r=0;r<rounds;r++){
-        const round=[];
-        for(let i=0;i<half;i++){
-          const t1 = arr[i]; const t2 = arr[arr.length-1-i];
-          if(t1==='BYE' || t2==='BYE') continue;
-          round.push([t1,t2]);
-        }
-        schedule.push(round);
-        // rotate
-        const fixed = arr[0]; const rest = arr.slice(1);
-        rest.unshift(rest.pop()); arr.splice(1, rest.length, ...rest);
-      }
-      return schedule; // array of rounds, each round array of [a,b]
-    }
-
-    async function createFixtures(){
-      if(!IS_ADMIN){ alert('Only admin'); return; }
-      const teams = window._teams||{}; const ids = Object.keys(teams);
-      if(ids.length < 2){ alert('Generate teams first'); return; }
-      const courts = Number(courtsInput.value||1);
-      const schedule = roundRobin(ids);
-      await set(ref(db, sessionPath('matches')), {});
-      let roundNo = 1; let matchOrder=0; let court=1;
-      for(const round of schedule){
-        court = 1;
-        for(const [a,b] of round){
-          const id = push(ref(db, sessionPath('matches'))).key;
-          await set(ref(db, sessionPath('matches', id)), {
-            id,
-            round: roundNo,
-            teamA: a,
-            teamB: b,
-            court,
-            status: 'pending',
-            aGames: 0,
-            bGames: 0,
-            createdAt: serverTimestamp()
-          });
-          matchOrder++;
-          court = court % courts + 1;
-        }
-        roundNo++;
-      }
-      // auto-set first round live
-      const snap = await get(ref(db, sessionPath('matches')));
-      const all = snap.val()||{};
-      for(const [id,m] of Object.entries(all)){
-        if(m.round===1) await update(ref(db, sessionPath('matches', id)), { status:'live' });
-      }
-      alert('Fixtures created');
-    }
-
-    async function incGame(matchId, side){
-      const mRef = ref(db, sessionPath('matches', matchId));
-      await runTransaction(mRef, (m)=>{
-        if(!m) return m;
-        if(m.status==='done') return m;
-        if(side==='A') m.aGames = (m.aGames||0)+1; else m.bGames = (m.bGames||0)+1;
-        m.status = 'live';
-        return m;
+    function renderLeaderboard(data){
+      const board = document.getElementById('board'); board.innerHTML='';
+      const players = Object.entries(data?.players||{});
+      const scores = {};
+      // wins
+      Object.entries(data?.matches||{}).forEach(([id,m])=>{
+        if (m.status!=='finished') return;
+        const aWin = (m.aScore||0) > (m.bScore||0);
+        const aTeam = data.teams?.[m.teamA]?.players||[];
+        const bTeam = data.teams?.[m.teamB]?.players||[];
+        for (const u of (aWin?aTeam:bTeam)) scores[u] = (scores[u]||0)+2;
       });
-    }
-
-    async function finalizeMatch(matchId){
-      const mRef = ref(db, sessionPath('matches', matchId));
-      await runTransaction(mRef, (m)=>{
-        if(!m) return m;
-        if(m.status==='done') return m;
-        m.status='done';
-        return m;
+      // attendance
+      players.forEach(([uid,p])=>{ if (p.isComing) scores[uid]=(scores[uid]||0)+1; });
+      const rows = players.map(([uid,p])=>({uid, name:p.name, points:scores[uid]||0})).sort((a,b)=>b.points-a.points);
+      rows.forEach((r,i)=>{
+        const div = document.createElement('div');
+        div.className='bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex items-center justify-between';
+        div.innerHTML = `<div class="text-xs opacity-80">#${i+1}</div><div class="font-semibold">${r.name}</div><div class="text-neon-emerald font-bold text-sm">${r.points}</div>`;
+        board.appendChild(div);
       });
-      // if all matches of the current round are done, move next round to live
-      const snap = await get(ref(db, sessionPath('matches')));
-      const all = snap.val()||{};
-      const byRound = {};
-      for(const [id,m] of Object.entries(all)) (byRound[m.round] ||= []).push({id,...m});
-      const rounds = Object.keys(byRound).map(Number).sort((a,b)=>a-b);
-      for(const r of rounds){
-        const allDone = byRound[r].every(m=>m.status==='done');
-        const alreadyLiveNext = byRound[r+1]?.some(m=>m.status==='live');
-        if(allDone && byRound[r+1] && !alreadyLiveNext){
-          for(const m of byRound[r+1]) await update(ref(db, sessionPath('matches', m.id)), { status:'live' });
-          break;
-        }
-      }
+      document.getElementById('btn-csv').onclick = () =>
+        exportCSV([['Rank','Name','Points'], ...rows.map((r,i)=>[i+1, r.name, r.points])]);
     }
-
-    // Event handlers
-    btnCreate.onclick = async ()=>{
-      if(!UID){ alert('Signing in... try again in a sec'); return; }
-      const code = await createSession();
-      codeInput.value = code;
-      await joinSession(code);
-      await savePlayer(false);
-      youBadge.textContent = `You: ${nameInput.value||'Anonymous'}`;
-    };
-
-    btnJoin.onclick = async ()=>{
-      const code = (codeInput.value || codeFromURL() || '').toUpperCase();
-      const name = nameInput.value.trim();
-      if(!code) return alert('Enter session code');
-      if(!name) return alert('Enter your name');
-      await joinSession(code);
-      await savePlayer(false);
-      youBadge.textContent = `You: ${name}`;
-    };
-
-    btnShare.onclick = async ()=>{
-      if(!SESSION) return alert('Join or create a session first');
-      const url = new URL(location.href); url.searchParams.set('code', SESSION);
-      const text = `Join our badminton league session: ${SESSION}`;
-      if(navigator.share){ try{ await navigator.share({ title:'Shuttle League', text, url:String(url) }); }catch{} }
-      else {
-        await navigator.clipboard.writeText(String(url));
-        alert('Join link copied to clipboard');
-      }
-    };
-
-    comingChk.onchange = ()=> savePlayer(comingChk.checked);
-    btnLock.onclick = ()=> setLocked(true);
-    btnUnlock.onclick = ()=> setLocked(false);
-    btnMakeTeams.onclick = ()=> generateTeams();
-    btnFixtures.onclick = ()=> createFixtures();
-
-    // Auto-join if URL has code
-    onAuthStateChanged(auth, async (user)=>{
-      if(!user){ await signIn(); return; }
-      UID = user.uid;
-      youBadge.textContent = `You: ${user.isAnonymous? 'Guest' : user.uid}`;
-      const urlCode = codeFromURL();
-      if(urlCode){ codeInput.value = urlCode; }
-    });
   </script>
 </body>
 </html>
